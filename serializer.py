@@ -43,6 +43,7 @@ def load(obj, cls):
         return cls(obj)
     elif isinstance(cls, _GenericAlias) and cls.__origin__ is list:    
         t = cls.__args__[0]
+        if not isinstance(obj, list): return obj
         return [load(i, t) for i in obj]
     else:
         inst = cls()

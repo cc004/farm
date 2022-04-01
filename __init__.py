@@ -81,7 +81,6 @@ def save_binds():
         dump(root, fp, indent=4, ensure_ascii=False)
 
 
-f = False
 for i, account in enumerate(acinfo["accounts"]):
     if "today_donate" not in account:
         acinfo["accounts"][i]["today_donate"] = 0
@@ -89,12 +88,11 @@ for i, account in enumerate(acinfo["accounts"]):
     if "name" not in account:
         acinfo["accounts"][i]["name"] = f"_{bot_name}{i}"
         save_acinfo()
-    if account["account"] == acinfo["account"]:
-        f = True
+'''
 if f == False:
     acinfo["accounts"].append({"account": acinfo["account"], "password": acinfo["password"], "today_donate": 0})
     save_acinfo()
-
+'''
 bot = get_bot()
 validate = None
 validating = False
@@ -196,6 +194,8 @@ def equip2quest(equip_id):
         equip_map_list = equip2list[str(equip_id)]
         return equip_map_list
 
+times = {}
+
 @sv.scheduled_job('interval', seconds=600)  # 十分钟轮询一次
 @sv.on_fullmatch(('请求捐赠', '申请捐赠', '发起捐赠'))
 async def on_farm_schedule(*args):
@@ -223,9 +223,16 @@ async def on_farm_schedule(*args):
         elif slave.clan != master.clan:
             await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}不在工会内')
             continue
+        # await slave.borrow_dungeon_member(1307668088363)
         for equip in await slave.get_requests():
             if equip.viewer_id == slave.viewer_id: continue # 不响应自己的捐赠
-            vid = str(equip.viewer_id)
+            if not equip.viewer_id in times:
+                times[equip.viewer_id] = 0
+            
+            if times[equip.viewer_id] <= 40:
+                times[equip.viewer_id] += 1
+                await slave.borrow_dungeon_member(equip.viewer_id)
+
             # if vid not in binds: continue  # 不响应不明人员
             if equip.donation_num >= equip.request_num: continue # 还没捐满
             
@@ -244,12 +251,14 @@ async def on_farm_schedule(*args):
                 myinv = slave.get_inventory((eInventoryType.Equip, equip.equip_id))
                 msg.append(f"{slave.name}的装备{equip_name}({equip['equip_id']})刷取完成，剩余{myinv}。")
                 await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(msg))
+        await master.remove_member(slave.viewer_id)
 
 @sv.scheduled_job('cron', hour='5')
 async def on_nextday(*args):
     master._logged = False
     for slave in slaves:
         slave._logged = False
+    times.clear()
 
 @sv.scheduled_job('cron', hour='23')
 async def on_dayend(*args):  # 每天晚上23点领家园体、任务奖励、礼物箱

@@ -1,3 +1,4 @@
+from numpy import empty
 from .clientbase import *
 
 class pcrclient(dataclient):
@@ -17,14 +18,18 @@ class pcrclient(dataclient):
                 req = ClanJoinRequest()
                 req.clan_id = clan
                 req.from_invite = inv.invite_id
-                return await self._request(req)
+                result = await self._request(req)
+                req = ClanInfoRequest()
+                req.clan_id = clan
+                await self._request(req)
+                return result
         else:
             return None
 
     async def remove_member(self, user: int):
         req = ClanRemoveRequest()
         req.clan_id = self.clan
-        req.viewer_id = user
+        req.remove_viewer_id = user
         return await self._request(req)
     
     async def invite_to_clan(self, user: int, msg: str = ''):
@@ -109,3 +114,58 @@ class pcrclient(dataclient):
         req.is_first = 1
         req.tips_id_list = []
         await self._request(req)
+    
+    async def reset_dungeon(self):
+        req = DungeonResetRequest()
+        req.dungeon_area_id = self.dungeon_area_id
+        return await self._request(req)
+
+    async def enter_dungeon(self, area: int):
+        req = DungeonEnterAreaRequest()
+        req.dungeon_area_id = area
+        return await self._request(req)
+
+    async def get_dungeon_unit(self):
+        req = DungeonDispatchUnitList2Request()
+        req.dungeon_area_id = self.dungeon_area_id
+        return (await self._request(req)).dispatch_unit_list
+    async def borrow_dungeon_member(self, viewer_id):
+        if not self.dungeon_avaliable: return
+        if self.dungeon_area_id != 0:
+            await self.reset_dungeon()
+        area = await self.enter_dungeon(31001) # 云海的山脉
+        for unit in await self.get_dungeon_unit():
+            if unit.owner_viewer_id == viewer_id:
+                if unit.unit_data.unit_level > self.team_level + 30:
+                    continue
+                req = DeckUpdateRequest()
+                req.deck_number = 4
+                req.unit_id_1 = 1
+                req.unit_id_2 = 0
+                req.unit_id_3 = 0
+                req.unit_id_4 = 0
+                req.unit_id_5 = 0
+                await self._request(req)
+                req = DungeonBattleStartRequest()
+                req.quest_id = 31001001 # 云海的山脉第一层
+                dispatch_unit = DungeonBattleStartUnit()
+                dispatch_unit.owner_viewer_id = unit.owner_viewer_id
+                dispatch_unit.unit_id = unit.unit_data.id
+                empty_unit = DungeonBattleStartUnit()
+                empty_unit.owner_viewer_id = self.viewer_id
+                empty_unit.unit_id = 0
+                req.unit_list = [
+                    dispatch_unit,
+                    empty_unit,
+                    empty_unit,
+                    empty_unit,
+                    empty_unit
+                ]
+                req.disable_skin = 1
+                req.support_battle_rarity = 0
+                await self._request(req)
+                req = DungeonBattleRetireRequest()
+                req.quest_id = 31001001
+                await self._request(req)
+                break
+        await self.reset_dungeon()

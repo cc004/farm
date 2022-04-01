@@ -88,6 +88,7 @@ class bsdkclient:
 
 TResponse = TypeVar('TResponse', bound=ResponseBase)
 class apiclient:
+    dungeon_area_id: int = 0
     viewer_id: int = 0
     urlroot: str = 'http://l3-prod-all-gs-gzlj.bilibiligame.net/'
     _requestid: str = ''
@@ -148,7 +149,7 @@ class apiclient:
             self._headers['REQUEST-ID'] = response.data_headers.request_id
 
         if response.data_headers.viewer_id:
-            self.viewer_id = response.data_headers.viewer_id
+            self.viewer_id = int(response.data_headers.viewer_id)
         # 傻逼python这个类型提示都做不出来？
         if response.data.server_error:
             print(f'pcrclient: /{request.url} api failed {response.data.server_error}')
@@ -270,6 +271,7 @@ class sessionclient(apiclient):
             raise
 
 class dataclient(sessionclient):
+    dungeon_avaliable: bool = False
     finishedQuest: Set[int] = set()
     jewel: int = 0
     clan: int = 0

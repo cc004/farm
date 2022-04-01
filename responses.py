@@ -375,6 +375,10 @@ class DungeonEnterAreaResponse(ResponseBase):
     season_pack_rate: int = None
     current_battle_mission_list: List[DungeonBattleMission] = None
     enter_reset_time: int = None
+
+    def update(self, client: "dataclient"):
+        client.dungeon_area_id = self.quest_id / 1000
+
 class DungeonInfoResponse(ResponseBase):
     enter_area_id: int = None
     rest_challenge_count: List[RestChallengeInfo] = None
@@ -385,6 +389,15 @@ class DungeonResetResponse(ResponseBase):
     rest_challenge_count: List[RestChallengeInfo] = None
     dungeon_area: List[DungeonArea] = None
     season_pack_rate: int = None
+
+    def update(self, client: "dataclient"):
+        client.dungeon_area_id = 0
+        type = self.dungeon_area[0].dungeon_type
+        for count in self.rest_challenge_count:
+            if count.dungeon_type == type:
+                client.dungeon_avaliable = count.count > 0
+                break
+
 class DungeonSkipResponse(ResponseBase):
     start_quest_id: int = None
     rest_challenge_count: List[RestChallengeInfo] = None
@@ -841,6 +854,12 @@ class HomeIndexResponse(ResponseBase):
         client.finishedQuest = [q.quest_id for q in self.quest_list if q.result_type > 0]
         client.clan = self.user_clan.clan_id
         client.donation_num = self.user_clan.donation_num
+        client.dungeon_area_id = self.dungeon_info.enter_area_id
+        type = self.dungeon_info.dungeon_area[0].dungeon_type
+        for count in self.dungeon_info.rest_challenge_count:
+            if count.dungeon_type == type:
+                client.dungeon_avaliable = count.count > 0
+                break
 
 class ItemETicketExchangeResponse(ResponseBase):
     reward_list: List[InventoryInfo] = None
