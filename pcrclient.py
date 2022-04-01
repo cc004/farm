@@ -1,6 +1,5 @@
 from typing import overload
-from .clientbase import dataclient
-from .requests import *
+from .clientbase import *
 
 class pcrclient(dataclient):
     def __init__(self, *args, **kwargs):
@@ -100,3 +99,8 @@ class pcrclient(dataclient):
         req = MissionAcceptRequest()
         req.type = 1
         await self._request(req)
+    
+    async def quest_skip_aware(self, quest: int, times: int):
+        if self.stamina < 80:
+            await self.recover_stamina()
+        await self.quest_skip(quest, times)

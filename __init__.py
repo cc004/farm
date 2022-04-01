@@ -1,9 +1,12 @@
 from json import load, dump, dumps, loads
 from nonebot import get_bot, on_command
+
+from hoshino.modules.farm.enums import eInventoryType
 from .pcrclient import pcrclient, ApiException, bsdkclient
 from asyncio import Lock
 from os.path import dirname, join, exists
 from .safeservice import SafeService
+from .common import *
 from hoshino.aiorequests import post, get
 import asyncio
 import time
@@ -167,251 +170,30 @@ async def captchaVerifier(gt, challenge, userid):
     # await captcha_lck.acquire()
     return validate
 
-
-async def errlogger(msg):
-    #await bot.send_private_msg(user_id=acinfo['admin'], message=f'thread{ordd}: {msg}')
-    print(f"farm: {msg}")
-
-
-last_login = None
-bclient = None
-client = None
-load_index = None
-home_index = None
-
-qlck = Lock()
-
-
 def nowtime():
     return int(time.time())
 
+master = pcrclient(account = {
+    "account": acinfo["account"],
+    "password": acinfo["password"],
+    "platform": 2,
+    "channel": 1
+}, validator = captchaVerifier)
+slaves = [pcrclient(account = {
+    "account": info["account"],
+    "password": info["password"],
+    "platform": 2,
+    "channel": 1
+}, validator = captchaVerifier) for info in acinfo["accounts"]]
 
-async def get_equip(client, quest_id, current_currency_num, current_stamina_num, current_ticket_num):
-    if current_stamina_num <= 60 and current_currency_num >= 1000:
-        try:
-            res = await client.callapi('/shop/recover_stamina', {"current_currency_num": current_currency_num})
-            if "server_error" in res:
-                return res["server_error"]["message"]
-            current_stamina_num += 120
-        except:
-            return False
-
-    quest_id = quest_id.split('-')
-    quest_id = int(f"11{int(quest_id[0]):03d}{int(quest_id[1]):03d}")
-    random_count = min(current_stamina_num // 10, current_ticket_num)
-    try:
-        res = await client.callapi('/quest/quest_skip', {"quest_id": quest_id, "random_count": random_count, "current_ticket_num": current_ticket_num})
-        if "server_error" in res:
-            return res["server_error"]["message"]
-    except:
-        return False
-    return True
-    # 重启以同步库存
-
-
-async def remove(client, clan_id: int, pcrid: str):
-    # 从公会中删除pcrid
-    try:
-        res = await client.callapi('/clan/remove', {'clan_id': int(clan_id), "remove_viewer_id": int(pcrid)})
-        if "server_error" in res:
-            return res["server_error"]["message"]
-        return True
-    except:
-        return False
-
-
-async def invite(client, id):
-    try:
-        res = await client.callapi('/clan/invite', {'invited_viewer_id': int(id), "invite_message": f"欢迎加入{house_name}！"})
-        if "server_error" in res:
-            return res["server_error"]["message"]
-        return True
-    except:
-        return False
-
-
-async def room(client):
-    try:
-        res = await client.callapi('/room/receive_all', {})  # 家园一键
-        if "server_error" in res and res["server_error"]["message"] != "没有可收取的道具。":
-            return res["server_error"]["message"]
-        return True
-    except:
-        return False
-
-
-async def mission(client):
-    try:
-        res = await client.callapi('/mission/accept', {"type": 1, "id": 0, "buy_id": 0})  # 日常任务一键
-        # 日常领取失败会直接返回标题界面
-        if "server_error" in res and res["server_error"]["message"] != "发生了错误。\\n回到标题界面。":
-            return res["server_error"]["message"]
-        return True
-    except:
-        return False
-
-
-flag_over_limit = 0  # 写崩了
-
-
-async def present(client):
-    global flag_over_limit
-    try:
-        res = await client.callapi('/present/receive_all', {"time_filter": -1, "type_filter": 0, "desc_flag": True})  # 礼物一键
-        if "server_error" in res:
-            flag_over_limit = 0
-        if "server_error" in res and res["server_error"]["message"] != "这件礼物已经收取。":
-            return res["server_error"]["message"]
-        flag_over_limit = res["flag_over_limit"]
-        return True
-    except:
-        return False
-
-
-async def accept(client, clan_id):
-    return  # 暂不支持，只支持bot邀请
-    # 检测加公会请求，若在binds中放行，否则拒绝
-    # res = await client.callapi('/clan/join_request_accept', {"request_viewer_id": <pcrid>, "clan_id": clan_id})
-
-
-async def profile(client, id):
-    return (await client.callapi('/profile/get_profile', {'target_viewer_id': int(id)}))
-
-
-async def get_donate_list(client, clan_id):
-    return (await client.callapi('/clan/chat_info_list', {
-        "clan_id": int(clan_id),
-        "start_message_id": 0,
-        "search_date": "2099-12-31",
-        "direction": 1,
-        "count": 10,
-        "wait_interval": 3,
-        "update_message_ids": [],
-    }))
-
-
-async def donate(client, clan_id, message_id, donation_num, current_equip_num):
-    return (await client.callapi('/equipment/donate', {"clan_id": clan_id, "message_id": message_id, "donation_num": donation_num, "current_equip_num": current_equip_num}))
-
-
-def make_acinfo(i, **args):
-    if i == -1:
-        return {"account": acinfo["account"], "password": acinfo["password"], "platform": 2, "channel": 1, "admin": acinfo["admin"]}
-    elif i == -2:
-        return {"account": args["acc"], "password": args["password"], "platform": 2, "channel": 1, "admin": acinfo["admin"]}
-    else:
-        return {"account": acinfo["accounts"][i]["account"], "password": acinfo["accounts"][i]["password"], "platform": 2, "channel": 1, "admin": acinfo["admin"]}
-
-
-async def query(info: str, account=-1, **args):
-    await asyncio.sleep(1)
-    if validating:
-        raise ApiException('账号被风控，请联系管理员输入验证码并重新登录', -1)
-
-    # global last_login, bclient, client
-    # global load_index, home_index
-    async with qlck:
-        # if account != last_login or ("forced_login" in args and args["forced_login"] == True):
-        #    bclient = bsdkclient(make_acinfo(account), captchaVerifier, errlogger)
-        #    client = pcrclient(bclient)
-        #    last_login = account
-        bclient = None
-        if account == -2:
-            bclient = bsdkclient(make_acinfo(account, acc=args["acc"], password=args["password"]), captchaVerifier, errlogger)
-        else:
-            bclient = bsdkclient(make_acinfo(account), captchaVerifier, errlogger)
-        client = pcrclient(bclient)
-        if client.shouldLogin:
-            print(f"farm: try login / account={account}")
-        while client.shouldLogin:
-            await client.login()
-        print(f"farm: login succeed / account={account}")
-        load_index = await client.callapi('/load/index', {'carrier': 'OPPO'})
-        home_index = await client.callapi('/home/index', {'message_id': 1, 'tips_id_list': [], 'is_first': 1, 'gold_history': 0})
-        clan_id = home_index["user_clan"]["clan_id"]
-        current_stamina = load_index["user_info"]["user_stamina"]
-        user_name = load_index["user_info"]["user_name"]
-        current_jewel = load_index["user_jewel"]["free_jewel"] + load_index["user_jewel"]["paid_jewel"]
-        today_donation_num = home_index["user_clan"]["donation_num"]
-
-        if info == "load_index":
-            return load_index
-        if account not in [-1, -2] and ("name" not in acinfo["accounts"][account] or acinfo["accounts"][account]["name"] != user_name):
-            acinfo["accounts"][account]["name"] = user_name
-            save_acinfo()
-        if account not in [-1, -2] and acinfo["accounts"][account]["today_donate"] < today_donation_num:
-            acinfo["accounts"][account]["today_donate"] = today_donation_num
-            save_acinfo()
-
-        item_list = {}
-        for item in load_index["item_list"]:
-            item_list[item["id"]] = item["stock"]
-        current_ticket = 0
-        try:
-            current_ticket = item_list[23001]
-        except:
-            pass
-
-        user_equip = {}
-        for item in load_index["user_equip"]:
-            user_equip[item["id"]] = item["stock"]
-
-        if info == "profile":
-            return (await profile(client, args["pcrid"]))['user_info']
-        if info == "invite":
-            return await invite(client, args["pcrid"])
-        if info == "remove":
-            return await remove(client, clan_id, args["pcrid"])
-        if info == "accept":
-            return await accept(client, clan_id)
-        if info == "room":
-            return await room(client)
-        if info == "mission":
-            return await mission(client)
-        if info == "present":
-            return await present(client)
-        if info == "get_donate_list":
-            return await get_donate_list(client, clan_id)
-        if info == "server_time":
-            return load_index["user_info"]["last_ac_time"]
-        if info == "donate":
-            if "equip_id" in args:
-                equip_id = int(args["equip_id"])
-                return await donate(client, clan_id, args["message_id"], args["donation_num"], user_equip[equip_id])
-            elif "current_equip_num" in args:
-                return await donate(client, clan_id, args["message_id"], args["donation_num"], args["current_equip_num"])
-            return False
-        if info == "get_equip":
-            equip_id = args["equip_id"]
-            if type(equip_id) == str:
-                quest_id = equip_id.split('-')
-                quest_id = int(f"11{int(quest_id[0]):03d}{int(quest_id[1]):03d}")
-                for i in home_index["quest_list"]:
-                    if i["quest_id"] == quest_id:
-                        if i["clear_flg"] == 3:
-                            return await get_equip(client, equip_id, current_jewel, current_stamina, current_ticket)
-                        else:
-                            return f"关卡{equip_id}为{i['clear_flg']}星通关，无法扫荡。"
-                return f"该农场号未解锁关卡{equip_id}"
-            elif str(equip_id) in equip2list:
-                equip_map_list = equip2list[str(equip_id)]
-                msg = f"包含{equip_id}的图有：" + " ".join(equip_map_list)
-                for equip_map in equip_map_list:
-                    msg += f"\n尝试自动刷取{equip_map}："
-                    res = await query("get_equip", account, equip_id=equip_map)
-                    if res == True:
-                        return True
-                    if type(res) == str:
-                        msg += f"Failed {res}"
-                    else:
-                        msg += "Failed"
-                return msg
-            else:
-                return "未找到该装备"
-
-
-ff_last = False
-
+def equip2quest(equip_id):
+    if type(equip_id) == str:
+        quest_id = equip_id.split('-')
+        quest_id = int(f"11{int(quest_id[0]):03d}{int(quest_id[1]):03d}")
+        return [quest_id]
+    elif str(equip_id) in equip2list:
+        equip_map_list = equip2list[str(equip_id)]
+        return equip_map_list
 
 @sv.scheduled_job('interval', seconds=600)  # 十分钟轮询一次
 @sv.on_fullmatch(('请求捐赠', '申请捐赠', '发起捐赠'))
@@ -430,160 +212,48 @@ async def on_farm_schedule(*args):
                 break
 
     print("farm: 轮询 / 捐赠装备")
-    # 对农场号按今日已捐数量排序，<10的拉去尝试捐东西
-    donate = {}
-    for i, account in enumerate(acinfo["accounts"]):
-        try:
-            donate[i] = account["today_donate"]
-        except:
-            donate[i] = 0
-    donate = list(sorted(donate.items(), key=lambda x: x[1]))
-    ff = False
-    f_low_equip_remind = []
-    for account in donate:
-        if account[1] >= 10:
+    for slave in slaves:
+        if slave.clan == 0:
+            await master.invite_to_clan(slave)
+        elif slave.clan != master.clan:
+            await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}不在工会内')
             continue
-        res = await query("get_donate_list", account[0])
-        server_time = await query("server_time", account[0])
-        #返回 clan_chat_message / users / equip_requests装备请求 / user_equip_data我的装备数量 / 其它（cooperation_data等）
-        user = {}
-        for i in res["users"]:
-            user[i["viewer_id"]] = i["name"]
-        donate_message_time = {}
-        for i in res["clan_chat_message"]:
-            if i["message_type"] == 2:
-                donate_message_time[i["message_id"]] = i["create_time"]
-        equip_requests = res["equip_requests"]
-        user_equip_data = {}
-        for i in res["user_equip_data"]:
-            user_equip_data[i["equip_id"]] = i["equip_count"]
-        ff = False
-        for equip in equip_requests:
-            # await asyncio.sleep(5)
-            if "history" in equip:
-                continue  # 不响应自己的捐赠
-            if server_time - donate_message_time[equip["message_id"]] >= 28800:
-                continue  # 不响应超过八小时的捐赠
-            if str(equip['viewer_id']) not in binds:
-                continue  # 不响应不明人员
-            if equip["donation_num"] < equip["request_num"]:  # 还没捐满
-                equip_name = equip2name[str(100000 + int(equip['equip_id']) % 10000)]
-                ff = True
-                if str(equip['viewer_id']) in binds:
-                    if equip["donation_num"] == 0:
-                        if binds[str(equip['viewer_id'])]["donate_remind"] == False or binds[str(equip['viewer_id'])]["donate_last"] > 8 * 3600:
-                            await bot.send_private_msg(user_id=int(binds[str(equip['viewer_id'])]["qqid"]), message=f"检测到 {user[equip['viewer_id']]} 的装备请求：{equip_name}({equip['equip_id']})")
-                            binds[str(equip['viewer_id'])]["donate_last"] = nowtime()
-                            binds[str(equip['viewer_id'])]["donate_remind"] = True
-                            binds[str(equip['viewer_id'])]["donate_clock"] = 0
-                        binds[str(equip['viewer_id'])]["donate_num"] = 0
-                        binds[str(equip['viewer_id'])]["donate_bot"] = []
-                        save_binds()
+        for equip in await slave.get_requests():
+            if equip.viewer_id == slave.viewer_id: continue # 不响应自己的捐赠
+            vid = str(equip.viewer_id)
+            if vid not in binds: continue  # 不响应不明人员
+            if equip.donation_num >= equip.request_num: continue # 还没捐满
+            
+            equip_name = equip2name[str(100000 + int(equip.equip_id) % 10000)]
+            # await bot.send_private_msg(user_id=int(binds[str(equip['viewer_id'])]["qqid"]), message=f"检测到 {equip.viewer_id} 的装备请求：{equip_name}({equip['equip_id']})")
 
-                #print(equip["equip_id"] in user_equip_data)
-                #print(user_equip_data[equip["equip_id"]])
-                #if user_equip_data[equip["equip_id"]] < 3000:  # 测试用
-                if user_equip_data[equip["equip_id"]] < 30:  # 该装备已较少
-                    msg = f"{acinfo['accounts'][account[0]]['name']}的装备{equip_name}({equip['equip_id']})存量较少，剩余{user_equip_data[equip['equip_id']]}。"
-                    equip_map_list = equip2list[str(equip['equip_id'])]
-                    if equip["equip_id"] not in f_low_equip_remind:
-                        f_low_equip_remind.append(equip["equip_id"])
-                        msg += "\n包含该装备的图有：" + " ".join(equip_map_list)
-                    f_getequip = False
-                    for equip_map in equip_map_list:
-                        msg += f"\n尝试自动刷取{equip_map}："
-                        res = await query("get_equip", account[0], equip_id=equip_map)
-                        if res == True:
-                            f_getequip = True
-                            msg += "Succeed"
-                            break
-                        if type(res) == str:
-                            msg += f"Failed {res}"
-                        else:
-                            msg += "Failed"
-                    if f_getequip == False:
-                        msg += f"\n请发送[农场刷图 {account[0]} <要刷的图>]指定bot刷图"
-                        print(f"\n请发送[农场刷图 {account[0]} <要刷的图>]指定bot刷图")
-                    await bot.send_private_msg(user_id=acinfo["admin"], message=msg)
+            myinv = slave.get_inventoy((eInventoryType.Equip, equip.equip_id))
+            if myinv >= 2 and equip.user_donation_num == 0 and slave.donation_num <= 8:
+                await slave.donate_equip(equip.equip_id, 2)
+                await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}的装备{equip_name}已捐赠')
+            if myinv < 30:
+                msg = [f"{slave.name}的装备{equip_name}({equip['equip_id']})存量较少，剩余{myinv}。"]
+                for quest in equip2quest(equip.equip_id):
+                    if quest in slave.finishedQuest:
+                        await slave.quest_skip_aware(quest, 1)
+                myinv = slave.get_inventoy((eInventoryType.Equip, equip.equip_id))
+                msg.append(f"{slave.name}的装备{equip_name}({equip['equip_id']})刷取完成，剩余{myinv}。")
+                await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(msg))
 
-                donation_num = min(user_equip_data[equip["equip_id"]], 2 - equip["user_donation_num"], equip["request_num"] - equip["donation_num"],
-                                   10 - acinfo["accounts"][account[0]]["today_donate"])
-                if donation_num > 0:
-                    # res = await query("donate", account[0], message_id=equip["message_id"], donation_num=donation_num, current_equip_num=user_equip_data[equip["equip_id"]])
-                    res = await query("donate", account[0], message_id=equip["message_id"], donation_num=donation_num, equip_id=equip["equip_id"])
-                    if "server_error" not in res:
-                        user_equip_data[equip["equip_id"]] -= donation_num
-                        acinfo["accounts"][account[0]]["today_donate"] = int(res["donation_num"])
-                        save_acinfo()
-                        binds[str(equip['viewer_id'])]["donate_num"] += donation_num
-                        binds[str(equip['viewer_id'])]["donate_bot"].append(acinfo["accounts"][account[0]]["name"])
-                        if not free:
-                            binds_accept_pcrid[str(equip['viewer_id'])] -= donation_num
-                        save_binds()
-                        if donation_num + equip["donation_num"] == equip["request_num"]:
-                            await bot.send_private_msg(user_id=int(binds[str(equip['viewer_id'])]["qqid"]),
-                                                       message=f"您的捐赠请求已完成！\n参与的{bot_name}有：" + f" ".join(binds[str(equip['viewer_id'])]['donate_bot']) +
-                                                       f"" if free else f"\n您的剩余捐赠额度为：{binds_accept_pcrid[str(equip['viewer_id'])]}")
-                            binds[str(equip['viewer_id'])]["donate_remind"] = False
-                            binds[str(equip['viewer_id'])]["donate_num"] = 0
-                            binds[str(equip['viewer_id'])]["donate_bot"] = []
-                            if not free:
-                                if binds_accept_pcrid[str(equip['viewer_id'])] <= -10:
-                                    pcrid = str(equip['viewer_id'])
-                                    quits[pcrid] = binds[pcrid]["qqid"]
-                                    binds.pop(pcrid)
-                                    save_binds()
-                                    await bot.send_private_msg(user_id=int(quits[pcrid]), message=f"您的捐赠额度已用尽，即将被移出农场。若仍需付费农场，请重新向主人购买。")
-                                    if await query("remove", pcrid=pcrid):
-                                        await bot.send_private_msg(user_id=int(quits[pcrid]), message=f"{pcrid}已退出农场")
-                                        quits.pop(pcrid)
-                                        save_binds()
-                                elif binds_accept_pcrid[str(equip['viewer_id'])] <= 0:
-                                    account = str(equip['viewer_id'])
-                                    qqid = int(binds[account]["qqid"])
-                                    await bot.send_private_msg(user_id=qqid, message=f"您的捐赠额度已用尽，进入缓冲区。当再次发起捐赠后，将被移出农场。\n若仍需付费农场，请重新向主人购买。")
-                                    await bot.send_private_msg(user_id=acinfo["admin"], message=f"{binds[account]['name']}({qqid})的捐赠额度已用尽，将被移出农场。")
-
-                            save_binds()
-                        if int(res["donation_num"]) == 10:
-                            break
-                    else:
-                        await bot.send_private_msg(user_id=acinfo["admin"], message=f"{acinfo['accounts'][account[0]]['name']}的装备捐赠失败：\n" + str(res))
-
-        if ff == False:
-            break
-    global ff_last
-    if ff == True and ff_last == False:
-        await bot.send_private_msg(user_id=acinfo["admin"], message=f"存在无法完成的装备请求，可能是今日bot捐赠额度已用尽。")
-    ff_last = ff
-
+@sv.scheduled_job('cron', hour='5')
+async def on_nextday(*args):
+    master._logged = False
+    for slave in slaves:
+        slave._logged = False
 
 @sv.scheduled_job('cron', hour='23')
 async def on_dayend(*args):  # 每天晚上23点领家园体、任务奖励、礼物箱
     global bot
     await _today_donate()
-    msg = []
-    retmsg = []
-    for i, account in enumerate(acinfo["accounts"]):
-        res1 = await query("room", i)
-        res2 = await query("mission", i)
-        res3 = await query("present", i)
-        if res1 == True and res2 == True and res3 == True:
-            pass
-        else:
-            msg.append(f"{account['name']}\n家园：{res1}\n任务：{res2}\n礼物：{res3}\n")
-        retmsg.append(await brush(bot, i, "12-7", 1))
-        if len(retmsg) > 5:
-            await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(retmsg))
-            retmsg = []
-    if len(retmsg) > 0:
-        await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(retmsg))
-    if msg != []:
-        await bot.send_private_msg(user_id=acinfo["admin"], message="以下农场号领取家园体、任务奖励、礼物箱出现报错：\n" + "\n".join(msg))
-    else:
-        await bot.send_private_msg(user_id=acinfo["admin"], message="所有农场号领取家园体、任务奖励、礼物箱成功")
+    for slave in slaves:
+        await slave.receive_all()
 
-
+'''
 async def brush(bot, i, equip_id, ret=0):
     global flag_over_limit
     f = True
@@ -605,7 +275,6 @@ async def brush(bot, i, equip_id, ret=0):
     if ret:
         return msg
     await bot.send_private_msg(user_id=acinfo["admin"], message=msg)
-
 
 @sv.on_prefix("农场刷图")
 async def 农场刷图(bot, ev):
@@ -630,7 +299,7 @@ async def 农场刷图(bot, ev):
             await brush(bot, i, equip_id)
     else:
         await brush(bot, i, equip_id)
-
+'''
 
 @on_command(f'validate{ordd}')
 async def validate(session):
@@ -667,7 +336,7 @@ async def on_farm_pay(bot, ev):
             pcrid = pcrid[1:-1]
         nam = ""
         try:
-            nam = (await query("profile", pcrid=pcrid))["user_name"]
+            nam = (await master.get_profile(pcrid)).user_info.user_name
         except:
             await bot.send_private_msg(user_id=ev.user_id, message="未找到玩家，请检查您的13位id！")
             return
@@ -699,7 +368,7 @@ async def on_farm_bind(bot, ev):
         print(pcrid)
         nam = ""
         try:
-            nam = (await query("profile", pcrid=pcrid))["user_name"]
+            nam = (await master.get_profile(pcrid)).user_info.user_name
         except:
             await bot.send_private_msg(user_id=ev.user_id, message="未找到玩家，请检查您的13位id！")
             return
@@ -723,12 +392,7 @@ async def on_farm_bind(bot, ev):
             binds[pcrid] = {"qqid": qqid, "name": nam, 'donate_last': nowtime(), 'donate_remind': False, 'donate_clock': 0, 'donate_num': 0, 'donate_bot': []}
             save_binds()
             await bot.send_private_msg(user_id=ev.user_id, message=f"pcrid={pcrid}\nname={nam}\n申请成功！" + "" if free else f"\n您的装备捐赠余额为 {binds_accept_pcrid[pcrid]} 个。\n" + "正在发起邀请...")
-            res = await query("invite", pcrid=pcrid)
-            if res == True:
-                await bot.send_private_msg(user_id=ev.user_id, message=f"公会名：{house_name}\n已发起邀请，请接受！" + "\n本农场为免费农场，每日bot捐赠额度用完即止。\n若需付费农场，请询问{bot_name}主人。" if free else "")
-            elif type(res) == str:
-                await bot.send_private_msg(user_id=ev.user_id, message=res)
-
+            await master.invite_to_clan(pcrid, '哈哈哈哈，寄汤来咯')
 
 @sv.on_prefix(("退出农场"))
 async def delete_farm_sub(bot, ev):
@@ -750,11 +414,10 @@ async def delete_farm_sub(bot, ev):
             save_binds()
             await bot.send_private_msg(user_id=ev.user_id, message="以下账号成功申请退出农场：\n" + "\n".join(pcrids) + "\n请耐心等待")
             for pcrid in pcrids:
-                if await query("remove", pcrid=pcrid):
-                    quits.pop(pcrid)
-                    save_binds()
-                    await bot.send_private_msg(user_id=ev.user_id, message=f"{pcrid}已退出农场")
-
+                await master.remove_member(pcrid)
+                quits.pop(pcrid)
+                save_binds()
+                await bot.send_private_msg(user_id=ev.user_id, message=f"{pcrid}已退出农场")
 
 async def _today_donate():
     donate = {}
@@ -816,8 +479,11 @@ async def kick_from_farm(bot, ev):
         quits[pcrid] = binds[pcrid]["qqid"]
         binds.pop(pcrid)
         save_binds()
-
-        if await query("remove", pcrid=pcrid):
+        try:
+            await master.remove_member(pcrid)
+        except:
+            pass
+        else:
             await bot.send_private_msg(user_id=ev.user_id, message=f"{pcrid}已退出农场")
             await bot.send_private_msg(user_id=int(quits[pcrid]), message=f"您的pcr账号{pcrid}已被移出农场")
             quits.pop(pcrid)
@@ -847,13 +513,15 @@ async def empty_farm(bot, ev):
             await bot.send_private_msg(user_id=ev.user_id, message="以下账号即将移出农场：\n" + "\n".join(pcrids) + "\n请耐心等待")
             pcrids_failed = []
             for pcrid in pcrids:
-                if await query("remove", pcrid=pcrid):
+                try:
+                    await master.remove_member(pcrid)
+                except:
+                    pcrids_failed.append(pcrid)
+                else:
                     qqid = int(quits[pcrid])
                     quits.pop(pcrid)
                     save_binds()
                     await bot.send_private_msg(user_id=qqid, message=f"您的pcr账号{pcrid}已被移出农场")
-                else:
-                    pcrids_failed.append(pcrid)
             if pcrids_failed == []:
                 await bot.send_private_msg(user_id=ev.user_id, message="所有账号移出农场成功")
             else:
