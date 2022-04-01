@@ -1,15 +1,17 @@
 from re import T
 from typing import Generic, TypeVar
 
-from hoshino.modules.farm.pcrclient import dataclient
-
 class ErrorInfo:
     title: str = None
     message: str = None
     status: int = 0
+
+    def __str__(self) -> str:
+        return f'{self.title}: {self.message} (code={self.status})'
+
 class ResponseBase:
     server_error: ErrorInfo = None
-    def update(self, client: dataclient): ...
+    def update(self, client: "dataclient"): ...
 
 TResponse = TypeVar('TResponse', bound=ResponseBase)
 
@@ -29,7 +31,7 @@ class Request(Generic[TResponse]):
     viewer_id: str = None
     
     @property
-    def crypted(self) -> bool: True
+    def crypted(self) -> bool: return True
 
     @property
     def url(self) -> str:

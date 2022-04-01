@@ -19,10 +19,6 @@ from .serializer import dump, load
 import json
 from .requests import *
 from .sdkrequests import *
-
-apiroot = 'http://l3-prod-all-gs-gzlj.bilibiligame.net'
-debugging = 1
-
 from os.path import dirname, join, exists
 
 curpath = dirname(__file__)
@@ -111,9 +107,9 @@ class apiclient:
         return b + (n * bytes([n]))
 
     @staticmethod
-    def _encrypt(data: str, key: bytes) -> bytes:
+    def _encrypt(data: bytes, key: bytes) -> bytes:
         aes = AES.new(key, AES.MODE_CBC, b'ha4nBYA2APUD6Uv1')
-        return aes.encrypt(apiclient.add_to_16(data.encode('utf8'))) + key
+        return aes.encrypt(apiclient._add_to_16(data)) + key
     @staticmethod
     def _decrypt(data: bytes) -> Tuple[bytes, bytes]:
         data = b64decode(data.decode('utf8'))
@@ -122,7 +118,7 @@ class apiclient:
 
     @staticmethod
     def _pack(data: object, key: bytes) -> bytes:
-        return apiclient._encrypt(packb(data, use_bin_type=False))
+        return apiclient._encrypt(packb(data, use_bin_type=False), key)
     @staticmethod
     def _unpack(data: bytes):
         dec, key = apiclient._decrypt(data)
@@ -130,15 +126,16 @@ class apiclient:
 
 
     async def _request_internal(self, request: Request[TResponse]) -> TResponse:
+        print(f'{self.name} requested {request} at /{request.url}')
         key = apiclient._createkey()
-        request.viewer_id = b64encode(apiclient._encrypt(str(self.viewer_id), key)).decode('ascii') if request.crypted else str(self.viewer_id)
+        request.viewer_id = b64encode(apiclient._encrypt(str(self.viewer_id).encode('utf8'), key)).decode('ascii') if request.crypted else str(self.viewer_id)
 
-        response = await (await post(apiroot + request.url, data=apiclient.pack(dump(request), key) if request.crypted else
+        response = await (await post(self.urlroot + request.url, data=apiclient._pack(dump(request), key) if request.crypted else
             str(request).encode('utf8'), headers=self._headers, timeout=10)).content
 
-        response = apiclient.unpack(response)[0] if request.crypted else loads(response)
+        response = apiclient._unpack(response)[0] if request.crypted else loads(response)
 
-        cls = request.__class__.__bases__[0].__orig_class__.__args__[0]
+        cls = request.__class__.__orig_bases__[0].__args__[0]
 
         response: Response[cls] = load(response, Response[cls])
 
@@ -151,7 +148,7 @@ class apiclient:
             self._headers['REQUEST-ID'] = response.data_headers.request_id
 
         if response.data_headers.viewer_id:
-            self.viewer_id = response.data_headers.request_id
+            self.viewer_id = response.data_headers.viewer_id
         # 傻逼python这个类型提示都做不出来？
         if response.data.server_error:
             print(f'pcrclient: /{request.url} api failed {response.data.server_error}')
@@ -181,7 +178,7 @@ class sessionclient(apiclient):
     async def _logger(msg): print(f'farm::{__class__}: {msg}')
 
     def __init__(self, account, validator):
-        super().__init__(self)
+        super().__init__()
         self.cacheDir = os.path.join(__file__, '..', 'cache')
         self.bsdk = bsdkclient(account, validator, sessionclient._logger)
         self._headers['PLATFORM'] = str(account['platform'])
@@ -189,7 +186,8 @@ class sessionclient(apiclient):
         self._headers['CHANNEL-ID'] = str(account['channel'])
         self._logging = False
         self._logged = False
-        os.makedirs(self.cacheDir)
+        if not os.path.exists(self.cacheDir):
+            os.makedirs(self.cacheDir)
         self.cacheFile = os.path.join(self.cacheDir, account['account'])
 
     async def _bililogin(self):
@@ -240,7 +238,7 @@ class sessionclient(apiclient):
                 req.apptype = 0
                 req.campaign_data = ''
                 req.campaign_user = randint(0, 100000) & ~1
-                if not (await self._request(req)).now_tutorial:
+                if (await self._request(req)).now_tutorial:
                     raise Exception("账号未过完教程")
                 
                 await self._request(CheckAgreementRequest())
@@ -265,7 +263,11 @@ class sessionclient(apiclient):
     async def _request(self, request: Request[TResponse]) -> TResponse:
         if not self._logged and not self._logging:
             await self._login()
-        return await super()._request(request)
+        try:
+            return await super()._request(request)
+        except ApiException:
+            self._logged = False
+            raise
 
 class dataclient(sessionclient):
     finishedQuest: Set[int] = set()
@@ -283,7 +285,7 @@ class dataclient(sessionclient):
     def update_inventory(self, item: InventoryInfo):
         self._inventory[(item.type, item.id)] = item.stock
 
-    def get_inventoy(self, item: Tuple[eInventoryType, int]):
+    def get_inventory(self, item: Tuple[eInventoryType, int]):
         return self._inventory[item] if item in self._inventory else 0
 
     def __init__(self, *args, **kwargs):

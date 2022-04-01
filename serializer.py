@@ -25,22 +25,22 @@ def _get_annotations(cls):
 
 def dump(obj, cls = None):
     if cls is None: cls = obj.__orig_class__ if hasattr(obj, '__orig_class__') else obj.__class__
-    if obj is None and isinstance(cls, type): obj = cls()
     if obj is None:
+        if cls is int or cls is float or isinstance(cls, type) and issubclass(cls, Enum): return 0
         return None
     if isinstance(cls, _GenericAlias) and cls.__origin__ is list:
         return [dump(i) for i in obj]
     elif cls is str or cls is int or cls is float:
-        return obj
+        return cls(obj)
     elif isinstance(cls, type) and issubclass(cls, Enum):
         return obj.value
     else:
-        return {name: dump(getattr(obj, name), cls1) for name, cls1 in _get_annotations(cls)}
+        return {key: val for key, val in ((name, dump(getattr(obj, name), cls1)) for name, cls1 in _get_annotations(cls)) if val is not None}
 
 def load(obj, cls):
-    if cls is int or cls is float or cls is str or cls is Enum:
-        return cls(obj)
     if obj is None: return None
+    if cls is int or cls is float or cls is str or isinstance(cls, type) and issubclass(cls, Enum):
+        return cls(obj)
     elif isinstance(cls, _GenericAlias) and cls.__origin__ is list:    
         t = cls.__args__[0]
         return [load(i, t) for i in obj]

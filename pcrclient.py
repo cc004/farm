@@ -1,4 +1,3 @@
-from typing import overload
 from .clientbase import *
 
 class pcrclient(dataclient):
@@ -28,15 +27,13 @@ class pcrclient(dataclient):
         req.viewer_id = user
         return await self._request(req)
     
-    @overload
     async def invite_to_clan(self, user: int, msg: str = ''):
         req = ClanInviteRequest()
         req.invite_message = msg
         req.invited_viewer_id = user
         return await self._request(req)
     
-    @overload
-    async def invite_to_clan(self, other: "pcrclient"):
+    async def invite_to_clan2(self, other: "pcrclient"):
         await self.invite_to_clan(other.viewer_id)
         for page in range(5):
             if await other.accept_clan_invitation(self.clan, page):
@@ -63,14 +60,14 @@ class pcrclient(dataclient):
     async def donate_equip(self, request: EquipRequests, times: int):
         req = EquipDonateRequest()
         req.clan_id = self.clan
-        req.current_equip_num = self.get_inventoy((eInventoryType.Equip, request.equip_id))
+        req.current_equip_num = self.get_inventory((eInventoryType.Equip, request.equip_id))
         req.donation_num = times
         req.message_id = request.message_id
         return await self._request(req)
     
     async def quest_skip(self, quest: int, times: int):
         req = QuestSkipRequest()
-        req.current_ticket_num = self.get_inventoy((eInventoryType.Item, 23001)),
+        req.current_ticket_num = self.get_inventory((eInventoryType.Item, 23001)),
         req.quest_id = quest,
         req.random_count = times
         return await self._request(req)
@@ -104,3 +101,11 @@ class pcrclient(dataclient):
         if self.stamina < 80:
             await self.recover_stamina()
         await self.quest_skip(quest, times)
+    
+    async def refresh(self):
+        req = HomeIndexRequest()
+        req.message_id = 1
+        req.gold_history = 0
+        req.is_first = 1
+        req.tips_id_list = []
+        await self._request(req)

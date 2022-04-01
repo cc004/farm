@@ -1,63 +1,5 @@
 from enum import Enum
 
-class eItemType(Enum):
-    Experience = 1
-    Cashing = 2
-    Enhancement = 3
-    Stamina = 4
-    Ticket = 5
-    TreasureBox = 6
-    Gift = 7
-    GachaTicket = 8
-    UnlockClass = 9
-    SpecialCurrency = 10
-    Material = 11
-    Currency = 12
-    Event = 13
-    UniqueEnhancement = 14
-    SpecialTicket = 17
-    SuperMaterial = 18
-    EventDispItemList = 19
-    HighRarityEquipMaterial = 20
-    GrowthItem = 21
-    Tutorial = 99
-    INVALID_VALUE = -1
-class eSrtCatalogStatus(Enum):
-    EnemyUnlock = 1
-    EnemyReaded = 2
-    PlayerUnlock = 3
-    PlayerReaded = 4
-    INVALID_VALUE = -1
-class eGachaType(Enum):
-    Gold = 1
-    Payment = 2
-    FreeOnly = 3
-    INVALID_VALUE = -1
-class eClanRole(Enum):
-    MEMBER = 0
-    SUB_LEADER = 30
-    LEADER = 40
-    INVALID_VALUE = -1
-class eBGMKey(Enum):
-    HOME = 200
-    ROOM_1F = 210
-    ROOM_2F = 211
-    ROOM_3F = 212
-    INVALID_VALUE = -1
-class eShopItemBannerType(Enum):
-    NONE = 0
-    RED_RIBBON = 1
-    BLUE_RIBBON = 2
-    INVALID_VALUE = -1
-class eEventSubStoryStatus(Enum):
-    UNREAD = 1
-    READED = 2
-    ADDED = 3
-    INVALID_VALUE = -1
-class ePkbHappenMode(Enum):
-    DRAMATIC = 1
-    SIMPLE = 2
-    INVALID_VALUE = -1
 class eClanChatMessageType(Enum):
     MESSAGE = 0
     STAMP = 1
@@ -73,16 +15,113 @@ class eClanChatMessageType(Enum):
     BATTLE_LOG_COMMENT = 12
     FRIEND_BATTLE_COMMENT = 13
     UNREAD = 14
+    MINI_GAME_SCORE = 0xF
     INVALID_VALUE = -1
-class eUserClanJoinStatus(Enum):
+class eBGMKey(Enum):
+    HOME = 200
+    ROOM_1F = 210
+    ROOM_2F = 211
+    ROOM_3F = 212
+    INVALID_VALUE = -1
+class eShopItemBannerType(Enum):
     NONE = 0
-    REQUEST = 1
-    JOINING = 2
-    SECESSION = 3
-    REJECTION = 4
-    DELETE = 5
-    CANCEL = 6
-    EXPULSION = 7
+    RED_RIBBON = 1
+    BLUE_RIBBON = 2
+    INVALID_VALUE = -1
+class eClanChatPlayButtonCondition(Enum):
+    NONE = 0
+    UNOPENED_MINI_GAME_IN_EVENT = 1
+    OPENED_MINI_GAME_IN_EVENT = 2
+    BEFORE_GAME_TABLE_ADD = 3
+    GAME_TABLE_PURCHASED_AFTER_GAME_TABLE_ADD = 4
+    GAME_TABLE_UNPURCHASED_AFTER_GAME_TABLE_ADD = 5
+    INVALID_VALUE = -1
+class eClanActivityGuideline(Enum):
+    GUIDELINE_NONE = 0
+    GUIDELINE_1 = 1
+    GUIDELINE_2 = 2
+    GUIDELINE_3 = 3
+    GUIDELINE_4 = 4
+    GUIDELINE_5 = 5
+    GUIDELINE_6 = 6
+    GUIDELINE_7 = 7
+    GUIDELINE_8 = 8
+    GUIDELINE_9 = 9
+    GUIDELINE_10 = 10
+    GUIDELINE_11 = 11
+    GUIDELINE_12 = 12
+    GUIDELINE_13 = 13
+    GUIDELINE_14 = 14
+    GUIDELINE_15 = 0xF
+    GUIDELINE_16 = 0x10
+    GUIDELINE_17 = 17
+    INVALID_VALUE = -1
+class eItemType(Enum):
+    Experience = 1
+    Cashing = 2
+    Enhancement = 3
+    Stamina = 4
+    Ticket = 5
+    TreasureBox = 6
+    Gift = 7
+    GachaTicket = 8
+    UnlockClass = 9
+    SpecialCurrency = 10
+    Material = 11
+    Currency = 12
+    Event = 13
+    UniqueEnhancement = 14
+    UniqueEquipCraft = 0xF
+    Minigame = 0x10
+    SpecialTicket = 17
+    SuperMaterial = 18
+    EventDispItemList = 19
+    HighRarityEquipMaterial = 20
+    GrowthItem = 21
+    Tutorial = 99
+    INVALID_VALUE = -1
+class eStoryStatus(Enum):
+    LOCKED = 1
+    UNVIEWED = 2
+    VIEWING = 3
+    INVALID_VALUE = -1
+class eRewardLimitType(Enum):
+    NO_LIMIT = 0
+    HAS_LIMIT = 1
+    INVALID_VALUE = -1
+class eInventoryType(Enum):
+    TreasureBox = 0
+    Unit = 1
+    Item = 2
+    EquipEnchant = 3
+    Equip = 4
+    TeamExp = 5
+    Stamina = 6
+    RoomItem = 7
+    Jewel = 8
+    Design = 10
+    Piece = 11
+    Gold = 12
+    ArenaBattleNumber = 13
+    GrandArenaBattleNumber = 14
+    Emblem = 0xF
+    CustomMypage = 0x10
+    EquipmentBox = 50
+    SeasonPassStamina = 51
+    RoomItemLevelUp = 901
+    SeasonPassPoint = 1001
+    SeasonPassLevel = 1002
+    Other = 9999
+    INVALID_VALUE = -1
+class eSrtCatalogStatus(Enum):
+    EnemyUnlock = 1
+    EnemyReaded = 2
+    PlayerUnlock = 3
+    PlayerReaded = 4
+    INVALID_VALUE = -1
+class ePkbHappenMode(Enum):
+    DRAMATIC = 1
+    SIMPLE = 2
     INVALID_VALUE = -1
 class eSystemId(Enum):
     ERROR = 0
@@ -185,38 +224,48 @@ class eSystemId(Enum):
     SHIORI_EVENT_VERY_HARD_BOSS = 8010
     SEASON_PASS = 90001
     INVALID_VALUE = -1
+class eClanRole(Enum):
+    MEMBER = 0
+    SUB_LEADER = 30
+    LEADER = 40
+    INVALID_VALUE = -1
+class eMissionStatusType(Enum):
+    NoClear = 0
+    EnableReceive = 1
+    AlreadyReceive = 2
+    ChallengePeriodEnd = 101
+    INVALID_VALUE = -1
+class eEventSubStoryStatus(Enum):
+    UNREAD = 1
+    READED = 2
+    ADDED = 3
+    INVALID_VALUE = -1
 class eClanJoinCondition(Enum):
     CONDITION_NONE = 0
     EVERYONE = 1
     ONLY_INVITATION = 2
     DISABLE = 3
     INVALID_VALUE = -1
-class eInventoryType(Enum):
-    TreasureBox = 0
-    Unit = 1
-    Item = 2
-    EquipEnchant = 3
-    Equip = 4
-    TeamExp = 5
-    Stamina = 6
-    RoomItem = 7
-    Jewel = 8
-    Design = 10
-    Piece = 11
-    Gold = 12
-    ArenaBattleNumber = 13
-    GrandArenaBattleNumber = 14
-    EquipmentBox = 50
-    SeasonPassStamina = 51
-    RoomItemLevelUp = 901
-    SeasonPassPoint = 1001
-    SeasonPassLevel = 1002
-    Other = 9999
+class eUserClanJoinStatus(Enum):
+    NONE = 0
+    REQUEST = 1
+    JOINING = 2
+    SECESSION = 3
+    REJECTION = 4
+    DELETE = 5
+    CANCEL = 6
+    EXPULSION = 7
     INVALID_VALUE = -1
-class eStoryStatus(Enum):
-    LOCKED = 1
-    UNVIEWED = 2
-    VIEWING = 3
+class eGachaType(Enum):
+    Gold = 1
+    Payment = 2
+    FreeOnly = 3
+    INVALID_VALUE = -1
+class eExchangeStaminaState(Enum):
+    NONE = 0
+    ALL_EXCHANGE = 1
+    PART_EXCHANGE = 2
+    NOT_EXCHANGE = 3
     INVALID_VALUE = -1
 class ePartyType(Enum):
     QUEST = 1
@@ -233,6 +282,8 @@ class ePartyType(Enum):
     FAVORITE = 12
     COOP = 13
     CLAN_BATTLE = 14
+    HATSUNE = 0xF
+    REPLAY = 0x10
     TOWER = 17
     TOWER_EX_1 = 18
     TOWER_EX_2 = 19
@@ -245,6 +296,7 @@ class ePartyType(Enum):
     FRIEND_BATTLE_DEF_1 = 26
     FRIEND_BATTLE_DEF_2 = 27
     FRIEND_BATTLE_DEF_3 = 28
+    UEK_TOWER = 0x1F
     SHIORI = 30
     ROOM_GROUND_FLOOR = 10101
     ROOM_SECOND_FLOOR = 10102
@@ -254,16 +306,6 @@ class ePartyType(Enum):
     KAISER_BATTLE_SUB_2 = 1002
     KAISER_BATTLE_SUB_3 = 1003
     KAISER_BATTLE_SUB_4 = 1004
-    INVALID_VALUE = -1
-class eExchangeStaminaState(Enum):
-    NONE = 0
-    ALL_EXCHANGE = 1
-    PART_EXCHANGE = 2
-    NOT_EXCHANGE = 3
-    INVALID_VALUE = -1
-class eRewardLimitType(Enum):
-    NO_LIMIT = 0
-    HAS_LIMIT = 1
     INVALID_VALUE = -1
 class ePromotionLevel(Enum):
     Bronze = 1
@@ -280,6 +322,8 @@ class ePromotionLevel(Enum):
     Purple2 = 12
     Purple3 = 13
     Purple4 = 14
+    Purple5 = 0xF
+    Purple6 = 0x10
     Purple7 = 17
     Red1 = 18
     Red2 = 19
@@ -288,36 +332,4 @@ class ePromotionLevel(Enum):
     Green2 = 22
     Green3 = 23
     Green4 = 24
-    INVALID_VALUE = -1
-class eClanChatPlayButtonCondition(Enum):
-    NONE = 0
-    UNOPENED_MINI_GAME_IN_EVENT = 1
-    OPENED_MINI_GAME_IN_EVENT = 2
-    BEFORE_GAME_TABLE_ADD = 3
-    GAME_TABLE_PURCHASED_AFTER_GAME_TABLE_ADD = 4
-    GAME_TABLE_UNPURCHASED_AFTER_GAME_TABLE_ADD = 5
-    INVALID_VALUE = -1
-class eMissionStatusType(Enum):
-    NoClear = 0
-    EnableReceive = 1
-    AlreadyReceive = 2
-    ChallengePeriodEnd = 101
-    INVALID_VALUE = -1
-class eClanActivityGuideline(Enum):
-    GUIDELINE_NONE = 0
-    GUIDELINE_1 = 1
-    GUIDELINE_2 = 2
-    GUIDELINE_3 = 3
-    GUIDELINE_4 = 4
-    GUIDELINE_5 = 5
-    GUIDELINE_6 = 6
-    GUIDELINE_7 = 7
-    GUIDELINE_8 = 8
-    GUIDELINE_9 = 9
-    GUIDELINE_10 = 10
-    GUIDELINE_11 = 11
-    GUIDELINE_12 = 12
-    GUIDELINE_13 = 13
-    GUIDELINE_14 = 14
-    GUIDELINE_17 = 17
     INVALID_VALUE = -1

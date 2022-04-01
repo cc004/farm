@@ -2,7 +2,6 @@ from typing import List
 from .modelbase import ResponseBase
 from .common import *
 from .enums import *
-from pcrclient import dataclient
 
 class AcceptAgreementResponse(ResponseBase):
     pass
@@ -249,7 +248,7 @@ class ClanCreateResponse(ResponseBase):
     clan_id: int = None
     clan_status: eUserClanJoinStatus = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.clan = self.clan_id
 
 class ClanDamageReportResponse(ResponseBase):
@@ -279,7 +278,7 @@ class ClanInfoResponse(ResponseBase):
     clan_point: int = None
     remaining_count: int = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.clan = self.clan.detail.clan_id
 
 class ClanInviteBlockResponse(ResponseBase):
@@ -408,11 +407,13 @@ class EquipDonateResponse(ResponseBase):
     rewards: List[InventoryInfo] = None
     add_present_count: int = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.donation_num = self.donation_num
-        client.update_inventory(self.donate_equip)
-        for item in self.rewards:
-            client.update_inventory(item)
+        if self.donate_equip:
+            client.update_inventory(self.donate_equip)
+        if self.rewards:
+            for item in self.rewards:
+                client.update_inventory(item)
 
 class EquipEnhanceMaxResponse(ResponseBase):
     unit_data: UnitData = None
@@ -836,7 +837,7 @@ class HomeIndexResponse(ResponseBase):
     custom_season_pack_alert: List[int] = None
     custom_season_pack_end_time: List[int] = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.finishedQuest = [q.quest_id for q in self.quest_list if q.result_type > 0]
         client.clan = self.user_clan.clan_id
         client.donation_num = self.user_clan.donation_num
@@ -1002,17 +1003,20 @@ class LoadIndexResponse(ResponseBase):
     erdr: int = None
     lbme: int = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.name = self.user_info.user_name
         client.team_level = self.user_info.team_level
         client.jewel = self.user_jewel.free_jewel
         client.clear_inventory()
-        for inv in self.item_list:
-            client.update_inventory(inv)
-        for inv in self.material_list:
-            client.update_inventory(inv)
-        for inv in self.user_equip:
-            client.update_inventory(inv)
+        if self.item_list:
+            for inv in self.item_list:
+                client.update_inventory(inv)
+        if self.material_list:
+            for inv in self.material_list:
+                client.update_inventory(inv)
+        if self.user_equip:
+            for inv in self.user_equip:
+                client.update_inventory(inv)
         client.stamina = self.user_info.user_stamina
 
 
@@ -1044,9 +1048,10 @@ class MissionAcceptResponse(ResponseBase):
     release_contents: List[ReleaseContentData] = None
     room_item_level_mission: List[int] = None
 
-    def update(self, client: dataclient):
-        for item in self.rewards:
-            client.update_inventory(item)
+    def update(self, client: "dataclient"):
+        if self.rewards:
+            for item in self.rewards:
+                client.update_inventory(item)
         client.stamina = self.stamina_info.user_stamina
 
 class MissionIndexResponse(ResponseBase):
@@ -1133,9 +1138,10 @@ class PresentReceiveAllResponse(ResponseBase):
     arena_count_info: ArenaCountInfo = None
     grand_arena_count_info: GrandArenaCountInfo = None
 
-    def update(self, client: dataclient):
-        for item in self.rewards:
-            client.update_inventory(item)
+    def update(self, client: "dataclient"):
+        if self.rewards:
+            for item in self.rewards:
+                client.update_inventory(item)
         client.stamina = self.stamina_info.user_stamina
 
 class PresentReceiveSingleResponse(ResponseBase):
@@ -1243,16 +1249,20 @@ class QuestSkipResponse(ResponseBase):
     clan_point: ClanPoint = None
     state_exchange_stamina: eExchangeStaminaState = None
 
-    def update(self, client: dataclient):
-        for item in self.item_list:
-            client.update_inventory(item)
-        for item in self.bonus_reward_list:
-            client.update_inventory(item)
-        for item in self.item_data:
-            client.update_inventory(item)
-        for result in self.quest_result_list:
-            for item in result.reward_list:
+    def update(self, client: "dataclient"):
+        if self.item_list:
+            for item in self.item_list:
                 client.update_inventory(item)
+        if self.bonus_reward_list:
+            for item in self.bonus_reward_list:
+                client.update_inventory(item)
+        if self.item_data:
+            for item in self.item_data:
+                client.update_inventory(item)
+        if self.quest_result_list:
+            for result in self.quest_result_list:
+                for item in result.reward_list:
+                    client.update_inventory(item)
         client.stamina = self.user_info.user_stamina
 
 class QuestStartResponse(ResponseBase):
@@ -1351,7 +1361,7 @@ class RoomReceiveItemAllResponse(ResponseBase):
     stamina_info: UserStaminaInfo = None
     add_present_count: int = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.stamina = self.stamina_info.user_stamina
 
 class RoomReceiveItemResponse(ResponseBase):
@@ -1616,7 +1626,7 @@ class ShopRecoverStaminaResponse(ResponseBase):
     user_jewel: UserJewel = None
     user_info: UserStaminaInfo = None
 
-    def update(self, client: dataclient):
+    def update(self, client: "dataclient"):
         client.jewel = self.user_jewel.free_jewel
         client.stamina = self.user_info.user_stamina
 

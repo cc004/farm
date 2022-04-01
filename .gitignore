@@ -1,4 +1,5 @@
 /debug
 /account.json
 /binds.json
+cache/*
 __pycache__

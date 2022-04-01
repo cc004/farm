@@ -1,5 +1,6 @@
 from json import load, dump, dumps, loads
 from nonebot import get_bot, on_command
+import nonebot
 
 from hoshino.modules.farm.enums import eInventoryType
 from .pcrclient import pcrclient, ApiException, bsdkclient
@@ -104,7 +105,7 @@ acfirst = False
 async def captchaVerifier(gt, challenge, userid):
     url = f"https://help.tencentbot.top/geetest/?captcha_type=1&challenge={challenge}&gt={gt}&userid={userid}&gs=1"
     global acfirst, validating
-    global binds, lck, validate, captcha_lck
+    global binds, validate, captcha_lck
     global otto
     if not otto:
         await bot.send_private_msg(
@@ -199,8 +200,9 @@ def equip2quest(equip_id):
 @sv.on_fullmatch(('请求捐赠', '申请捐赠', '发起捐赠'))
 async def on_farm_schedule(*args):
     global bot
-    # print("farm: 轮询 / 公会申请审批")
+    print("farm: 轮询 / 公会申请审批")
     # await query("accept")  # 先登录担任会长的农场号，看看有无加公会请求
+    '''
     print("farm: 轮询 / 捐赠计时")
     clock = ([24] if free else [24, 8])
     for pcrid in binds:
@@ -210,33 +212,36 @@ async def on_farm_schedule(*args):
                 binds[pcrid]["donate_clock"] = i
                 save_binds()
                 break
+    '''
 
+    await master.refresh()
     print("farm: 轮询 / 捐赠装备")
     for slave in slaves:
+        await slave.refresh()
         if slave.clan == 0:
-            await master.invite_to_clan(slave)
+            await master.invite_to_clan2(slave)
         elif slave.clan != master.clan:
             await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}不在工会内')
             continue
         for equip in await slave.get_requests():
             if equip.viewer_id == slave.viewer_id: continue # 不响应自己的捐赠
             vid = str(equip.viewer_id)
-            if vid not in binds: continue  # 不响应不明人员
+            # if vid not in binds: continue  # 不响应不明人员
             if equip.donation_num >= equip.request_num: continue # 还没捐满
             
             equip_name = equip2name[str(100000 + int(equip.equip_id) % 10000)]
             # await bot.send_private_msg(user_id=int(binds[str(equip['viewer_id'])]["qqid"]), message=f"检测到 {equip.viewer_id} 的装备请求：{equip_name}({equip['equip_id']})")
 
-            myinv = slave.get_inventoy((eInventoryType.Equip, equip.equip_id))
+            myinv = slave.get_inventory((eInventoryType.Equip, equip.equip_id))
             if myinv >= 2 and equip.user_donation_num == 0 and slave.donation_num <= 8:
-                await slave.donate_equip(equip.equip_id, 2)
+                await slave.donate_equip(equip, 2)
                 await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}的装备{equip_name}已捐赠')
             if myinv < 30:
                 msg = [f"{slave.name}的装备{equip_name}({equip['equip_id']})存量较少，剩余{myinv}。"]
                 for quest in equip2quest(equip.equip_id):
                     if quest in slave.finishedQuest:
                         await slave.quest_skip_aware(quest, 1)
-                myinv = slave.get_inventoy((eInventoryType.Equip, equip.equip_id))
+                myinv = slave.get_inventory((eInventoryType.Equip, equip.equip_id))
                 msg.append(f"{slave.name}的装备{equip_name}({equip['equip_id']})刷取完成，剩余{myinv}。")
                 await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(msg))
 
@@ -303,7 +308,7 @@ async def 农场刷图(bot, ev):
 
 @on_command(f'validate{ordd}')
 async def validate(session):
-    global binds, lck, validate, validating, captcha_lck, otto
+    global binds, validate, validating, captcha_lck, otto
     if session.ctx['user_id'] == acinfo['admin']:
         validate = session.ctx['message'].extract_plain_text().replace(f"validate{ordd}", "").strip()
         if validate == "manual":
@@ -356,43 +361,42 @@ async def on_farm_pay(bot, ev):
 
 @sv.on_prefix(("加入农场"))
 async def on_farm_bind(bot, ev):
-    global binds, lck
-    async with lck:
-        qqid = str(ev['user_id'])
-        pcrid = ev.message.extract_plain_text().strip()
-        if pcrid == "":
-            await bot.send_private_msg(user_id=ev.user_id, message=sv_help)
+    global binds
+    qqid = str(ev['user_id'])
+    pcrid = ev.message.extract_plain_text().strip()
+    if pcrid == "":
+        await bot.send_private_msg(user_id=ev.user_id, message=sv_help)
+        return
+    if pcrid[0] == "<" and pcrid[-1] == ">":
+        pcrid = pcrid[1:-1]
+    print(pcrid)
+    nam = ""
+    try:
+        nam = (await master.get_profile(pcrid)).user_info.user_name
+    except:
+        await bot.send_private_msg(user_id=ev.user_id, message="未找到玩家，请检查您的13位id！")
+        return
+    if not free:
+        if pcrid not in binds_accept_pcrid:
+            await bot.send_private_msg(user_id=ev.user_id, message=f"本农场为付费农场，请向主人获取授权！\n若需免费农场，请转向ebq申请。")
             return
-        if pcrid[0] == "<" and pcrid[-1] == ">":
-            pcrid = pcrid[1:-1]
-        print(pcrid)
-        nam = ""
-        try:
-            nam = (await master.get_profile(pcrid)).user_info.user_name
-        except:
-            await bot.send_private_msg(user_id=ev.user_id, message="未找到玩家，请检查您的13位id！")
+        if binds_accept_pcrid[pcrid] <= 0:
+            await bot.send_private_msg(user_id=ev.user_id, message="您的捐赠额度已用尽，请向主人重新购买！")
             return
-        if not free:
-            if pcrid not in binds_accept_pcrid:
-                await bot.send_private_msg(user_id=ev.user_id, message=f"本农场为付费农场，请向主人获取授权！\n若需免费农场，请转向ebq申请。")
-                return
-            if binds_accept_pcrid[pcrid] <= 0:
-                await bot.send_private_msg(user_id=ev.user_id, message="您的捐赠额度已用尽，请向主人重新购买！")
-                return
-        if pcrid in quits:
-            quits.pop(pcrid)
-            await bot.send_private_msg(user_id=ev.user_id, message=f"该账号曾请求退出农场，已删除旧请求。")
-        if pcrid in binds:
-            if binds[pcrid]["qqid"] != qqid:
-                old_qqid = binds[pcrid]["qqid"]
-                await bot.send_private_msg(user_id=ev.user_id, message=f"该账号曾被{old_qqid}绑定。为了防止恶意绑定，已拒绝您的本次请求。")
-            else:
-                await bot.send_private_msg(user_id=ev.user_id, message=f"该账号已提交过加入农场请求。")
+    if pcrid in quits:
+        quits.pop(pcrid)
+        await bot.send_private_msg(user_id=ev.user_id, message=f"该账号曾请求退出农场，已删除旧请求。")
+    if pcrid in binds:
+        if binds[pcrid]["qqid"] != qqid:
+            old_qqid = binds[pcrid]["qqid"]
+            await bot.send_private_msg(user_id=ev.user_id, message=f"该账号曾被{old_qqid}绑定。为了防止恶意绑定，已拒绝您的本次请求。")
         else:
-            binds[pcrid] = {"qqid": qqid, "name": nam, 'donate_last': nowtime(), 'donate_remind': False, 'donate_clock': 0, 'donate_num': 0, 'donate_bot': []}
-            save_binds()
-            await bot.send_private_msg(user_id=ev.user_id, message=f"pcrid={pcrid}\nname={nam}\n申请成功！" + "" if free else f"\n您的装备捐赠余额为 {binds_accept_pcrid[pcrid]} 个。\n" + "正在发起邀请...")
-            await master.invite_to_clan(pcrid, '哈哈哈哈，寄汤来咯')
+            await bot.send_private_msg(user_id=ev.user_id, message=f"该账号已提交过加入农场请求。")
+    else:
+        binds[pcrid] = {"qqid": qqid, "name": nam, 'donate_last': nowtime(), 'donate_remind': False, 'donate_clock': 0, 'donate_num': 0, 'donate_bot': []}
+        save_binds()
+        await bot.send_private_msg(user_id=ev.user_id, message=f"pcrid={pcrid}\nname={nam}\n申请成功！" + "" if free else f"\n您的装备捐赠余额为 {binds_accept_pcrid[pcrid]} 个。\n" + "正在发起邀请...")
+        await master.invite_to_clan(pcrid, '哈哈哈哈，寄汤来咯')
 
 @sv.on_prefix(("退出农场"))
 async def delete_farm_sub(bot, ev):
@@ -489,6 +493,10 @@ async def kick_from_farm(bot, ev):
             quits.pop(pcrid)
             save_binds()
     else:
+        try:
+            await master.remove_member(pcrid)
+        except:
+            pass
         await bot.send_private_msg(user_id=ev.user_id, message=f"农场无该授权成员：{pcrid}\n请发送[农场人员]获取列表")
 
 
