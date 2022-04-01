@@ -1,8 +1,15 @@
 from re import T
 from typing import Generic, TypeVar
 
+from hoshino.modules.farm.pcrclient import dataclient
+
+class ErrorInfo:
+    title: str = None
+    message: str = None
+    status: int = 0
 class ResponseBase:
-    pass
+    server_error: ErrorInfo = None
+    def update(self, client: dataclient): ...
 
 TResponse = TypeVar('TResponse', bound=ResponseBase)
 

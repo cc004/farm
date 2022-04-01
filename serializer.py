@@ -1,45 +1,52 @@
-from typing import _GenericAlias
+from typing import _GenericAlias, Generic
 from enum import Enum
-from msgpack import packb, unpackb
 
 def _get_annotations(cls):
+    typing = {}
+    if isinstance(cls, _GenericAlias): # if class is generic type with params
+        for base in cls.__origin__.__orig_bases__:
+            if isinstance(base, _GenericAlias):
+                generic = base
+                break
+        else:
+            raise Exception
+        for typevar, type in zip(generic.__args__, cls.__args__):
+            typing[typevar] = type
+        cls = cls.__origin__
     if hasattr(cls, '__annotations__'):
-        yield from cls.__annotations__.items()
-    for base in cls.__bases__:
-        yield from _get_annotations(base)
+        for name, type in cls.__annotations__.items():
+            yield name, (typing[type] if type in typing else type)
+    orig = (cls.__orig_bases__ if hasattr(cls, '__orig_bases__') else cls.__bases__)
+    if not orig: return
+    orig = orig[0]
+    if cls.__bases__[0] is Generic:
+        return
+    yield from _get_annotations(orig)
 
-def _dump(obj):
-    if obj is list or obj is tuple:
-        return [_dump(i) for i in obj]
-    elif obj is dict:
+def dump(obj, cls = None):
+    if cls is None: cls = obj.__orig_class__ if hasattr(obj, '__orig_class__') else obj.__class__
+    if obj is None and isinstance(cls, type): obj = cls()
+    if obj is None:
+        return None
+    if isinstance(cls, _GenericAlias) and cls.__origin__ is list:
+        return [dump(i) for i in obj]
+    elif cls is str or cls is int or cls is float:
         return obj
-    elif obj is str or obj is int or obj is float:
-        return obj
-    elif isinstance(obj, Enum):
+    elif isinstance(cls, type) and issubclass(cls, Enum):
         return obj.value
     else:
-        return {name: _dump(getattr(obj, name)) for name, cls in _get_annotations(obj.__class__)}
+        return {name: dump(getattr(obj, name), cls1) for name, cls1 in _get_annotations(cls)}
 
-def _load(obj, cls):
+def load(obj, cls):
     if cls is int or cls is float or cls is str or cls is Enum:
         return cls(obj)
-    elif isinstance(cls, _GenericAlias):
-        if cls._name == "List":           
-            t = cls.__args__[0]
-            return [_load(i, t) for i in obj]
-        elif cls._name == "Dict":
-            k = cls.__args__[0]
-            v = cls.__args__[1]
-            return {_load(i, k): _load(j, v) for i, j in obj.items()}
+    if obj is None: return None
+    elif isinstance(cls, _GenericAlias) and cls.__origin__ is list:    
+        t = cls.__args__[0]
+        return [load(i, t) for i in obj]
     else:
         inst = cls()
         for name, cls in _get_annotations(cls):
             if name in obj:
-                setattr(inst, name, _load(obj[name], cls))
+                setattr(inst, name, load(obj[name], cls))
         return inst
-
-def dump(obj: object) -> bytes:
-    return packb(_dump(obj), use_bin_type=False)
-
-def load(data: bytes, cls) -> object:
-    return _load(unpackb(data, strict_map_key=False), cls)

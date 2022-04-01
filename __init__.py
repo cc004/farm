@@ -1,14 +1,8 @@
-from enum import Flag
 from json import load, dump, dumps, loads
-from re import T
 from nonebot import get_bot, on_command
-from hoshino import priv
-from hoshino.typing import NoticeSession
 from .pcrclient import pcrclient, ApiException, bsdkclient
 from asyncio import Lock
 from os.path import dirname, join, exists
-from copy import deepcopy
-from traceback import format_exc
 from .safeservice import SafeService
 from hoshino.aiorequests import post, get
 import asyncio
