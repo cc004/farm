@@ -88,6 +88,7 @@ class bsdkclient:
 
 TResponse = TypeVar('TResponse', bound=ResponseBase)
 class apiclient:
+    server_time: int = 0
     dungeon_area_id: int = 0
     viewer_id: int = 0
     urlroot: str = 'http://l3-prod-all-gs-gzlj.bilibiligame.net/'
@@ -139,6 +140,9 @@ class apiclient:
         cls = request.__class__.__orig_bases__[0].__args__[0]
 
         response: Response[cls] = load(response, Response[cls])
+
+        if response.data_headers.servertime:
+            self.server_time = response.data_headers.servertime
 
         if response.data_headers.sid:
             t = md5()
@@ -271,6 +275,7 @@ class sessionclient(apiclient):
             raise
 
 class dataclient(sessionclient):
+    settings: IniSetting = None
     dungeon_avaliable: bool = False
     finishedQuest: Set[int] = set()
     jewel: int = 0

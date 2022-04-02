@@ -86,7 +86,9 @@ class pcrclient(dataclient):
         req.start_message_id = 0
         req.update_message_ids = []
         req.wait_interval = 3
-        return (await self._request(req)).equip_requests
+        resp = await self._request(req)
+        times = {msg.message_id : msg.create_time for msg in resp.clan_chat_message if msg.message_type == eClanChatMessageType.DONATION}
+        return (equip for equip in resp.equip_requests if times[equip.message_id] > 28800)
     
     async def recover_stamina(self):
         req = ShopRecoverStaminaRequest()
@@ -129,6 +131,7 @@ class pcrclient(dataclient):
         req = DungeonDispatchUnitList2Request()
         req.dungeon_area_id = self.dungeon_area_id
         return (await self._request(req)).dispatch_unit_list
+
     async def borrow_dungeon_member(self, viewer_id):
         if not self.dungeon_avaliable: return
         if self.dungeon_area_id != 0:
@@ -136,7 +139,7 @@ class pcrclient(dataclient):
         area = await self.enter_dungeon(31001) # 云海的山脉
         for unit in await self.get_dungeon_unit():
             if unit.owner_viewer_id == viewer_id:
-                if unit.unit_data.unit_level > self.team_level + 30:
+                if unit.unit_data.unit_level > self.team_level + self.settings.dungeon.support_lv_band:
                     continue
                 req = DeckUpdateRequest()
                 req.deck_number = 4

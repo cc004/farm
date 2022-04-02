@@ -1037,6 +1037,7 @@ class LoadIndexResponse(ResponseBase):
             for inv in self.user_equip:
                 client.update_inventory(inv)
         client.stamina = self.user_info.user_stamina
+        client.settings = self.ini_setting
 
 
 class LoadNextDayIndexResponse(ResponseBase):
