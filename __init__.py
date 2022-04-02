@@ -1,4 +1,5 @@
 from json import load, dump, dumps, loads
+from typing import Set
 from nonebot import get_bot, on_command
 import nonebot
 
@@ -196,6 +197,10 @@ def equip2quest(equip_id):
 
 times = {}
 
+slaves_in_clan: Set[pcrclient] = {}
+
+lck = asyncio.Lock()
+
 @sv.scheduled_job('interval', seconds=600)  # 十分钟轮询一次
 @sv.on_fullmatch(('请求捐赠', '申请捐赠', '发起捐赠'))
 async def on_farm_schedule(*args):
@@ -213,45 +218,52 @@ async def on_farm_schedule(*args):
                 save_binds()
                 break
     '''
+    async with lck:
+        await master.refresh()
+        print("farm: 轮询 / 捐赠装备")
+        for slave in slaves:
+            await slave.refresh()
+            if slave.clan == 0:
+                member_count = len((await master.get_clan_info()).members)
+                if member_count > 30:
+                    for member in list(slaves_in_clan):
+                        if member != slave:
+                            master.remove_member(member.viewer_id)
+                            slaves_in_clan.remove(member)
+                            break
+                await master.invite_to_clan2(slave)
+                slaves_in_clan.update(slave)
+            elif slave.clan != master.clan:
+                await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}不在工会内')
+                continue
+            # await slave.borrow_dungeon_member(1307668088363)
+            for equip in await slave.get_requests():
+                if equip.viewer_id == slave.viewer_id: continue # 不响应自己的捐赠
+                if not equip.viewer_id in times:
+                    times[equip.viewer_id] = 0
+                
+                if times[equip.viewer_id] <= 40:
+                    times[equip.viewer_id] += 1
+                    await slave.borrow_dungeon_member(equip.viewer_id)
 
-    await master.refresh()
-    print("farm: 轮询 / 捐赠装备")
-    for slave in slaves:
-        await slave.refresh()
-        if slave.clan == 0:
-            await master.invite_to_clan2(slave)
-        elif slave.clan != master.clan:
-            await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}不在工会内')
-            continue
-        # await slave.borrow_dungeon_member(1307668088363)
-        for equip in await slave.get_requests():
-            if equip.viewer_id == slave.viewer_id: continue # 不响应自己的捐赠
-            if not equip.viewer_id in times:
-                times[equip.viewer_id] = 0
-            
-            if times[equip.viewer_id] <= 40:
-                times[equip.viewer_id] += 1
-                await slave.borrow_dungeon_member(equip.viewer_id)
+                # if vid not in binds: continue  # 不响应不明人员
+                if equip.donation_num >= equip.request_num: continue # 还没捐满
+                
+                equip_name = equip2name[str(100000 + int(equip.equip_id) % 10000)]
+                # await bot.send_private_msg(user_id=int(binds[str(equip['viewer_id'])]["qqid"]), message=f"检测到 {equip.viewer_id} 的装备请求：{equip_name}({equip['equip_id']})")
 
-            # if vid not in binds: continue  # 不响应不明人员
-            if equip.donation_num >= equip.request_num: continue # 还没捐满
-            
-            equip_name = equip2name[str(100000 + int(equip.equip_id) % 10000)]
-            # await bot.send_private_msg(user_id=int(binds[str(equip['viewer_id'])]["qqid"]), message=f"检测到 {equip.viewer_id} 的装备请求：{equip_name}({equip['equip_id']})")
-
-            myinv = slave.get_inventory((eInventoryType.Equip, equip.equip_id))
-            if myinv >= 2 and equip.user_donation_num == 0 and slave.donation_num <= 8:
-                await slave.donate_equip(equip, 2)
-                await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}的装备{equip_name}已捐赠')
-            if myinv < 30:
-                msg = [f"{slave.name}的装备{equip_name}({equip['equip_id']})存量较少，剩余{myinv}。"]
-                for quest in equip2quest(equip.equip_id):
-                    if quest in slave.finishedQuest:
-                        await slave.quest_skip_aware(quest, 1)
                 myinv = slave.get_inventory((eInventoryType.Equip, equip.equip_id))
-                msg.append(f"{slave.name}的装备{equip_name}({equip['equip_id']})刷取完成，剩余{myinv}。")
-                await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(msg))
-        await master.remove_member(slave.viewer_id)
+                if myinv >= 2 and equip.user_donation_num == 0 and slave.donation_num <= 8:
+                    await slave.donate_equip(equip, 2)
+                    await bot.send_private_msg(user_id=acinfo["admin"], message=f'{slave.name}的装备{equip_name}已捐赠')
+                if myinv < 30:
+                    msg = [f"{slave.name}的装备{equip_name}({equip['equip_id']})存量较少，剩余{myinv}。"]
+                    for quest in equip2quest(equip.equip_id):
+                        if quest in slave.finishedQuest:
+                            await slave.quest_skip_aware(quest, 1)
+                    myinv = slave.get_inventory((eInventoryType.Equip, equip.equip_id))
+                    msg.append(f"{slave.name}的装备{equip_name}({equip['equip_id']})刷取完成，剩余{myinv}。")
+                    await bot.send_private_msg(user_id=acinfo["admin"], message='\n'.join(msg))
 
 @sv.scheduled_job('cron', hour='5')
 async def on_nextday(*args):
